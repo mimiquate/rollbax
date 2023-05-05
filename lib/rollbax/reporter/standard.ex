@@ -20,6 +20,19 @@ defmodule Rollbax.Reporter.Standard do
     }
   end
 
+  # Report these unidentified so that they can be recognized, explored and better
+  # captured and reported eventually
+  def handle_event(:error_report, {_pid, type, _report}) do
+    %Rollbax.Exception{
+      class: "(Unidentified error_report)",
+      message: "Unidentified error_report",
+      stacktrace: [],
+      custom: %{
+        type: type
+      }
+    }
+  end
+
   def handle_event(_type, _event) do
     :next
   end
