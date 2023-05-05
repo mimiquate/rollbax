@@ -10,6 +10,16 @@ defmodule Rollbax.Reporter.Standard do
     handle_error_format(format, data)
   end
 
+  def handle_event(:error_report, {_pid, :supervisor_report, report}) do
+    {error, stacktrace} = Keyword.fetch!(report, :reason)
+
+    %Rollbax.Exception{
+      class: to_string(error.__struct__),
+      message: error.message,
+      stacktrace: stacktrace
+    }
+  end
+
   def handle_event(_type, _event) do
     :next
   end
