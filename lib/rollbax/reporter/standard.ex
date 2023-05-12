@@ -10,6 +10,18 @@ defmodule Rollbax.Reporter.Standard do
     handle_error_format(format, data)
   end
 
+  def handle_event(:error_report, {_pid, :crash_report, report}) do
+    %Rollbax.Exception{
+      class: "(Unidentified crash_report)",
+      message: "Unidentified crash_report",
+      stacktrace: [],
+      custom: %{
+        type: :crash_report,
+        report: inspect(report)
+      }
+    }
+  end
+
   def handle_event(_type, _event) do
     :next
   end
