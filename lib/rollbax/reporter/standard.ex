@@ -20,6 +20,10 @@ defmodule Rollbax.Reporter.Standard do
     }
   end
 
+  def handle_event(:error_report, {_, :crash_report, report}) do
+    handle_error_format(:crash_report, report)
+  end
+
   # Report these unidentified so that they can be recognized, explored and better
   # captured and reported eventually
   def handle_event(:error_report, {_pid, type, report}) do
@@ -94,6 +98,51 @@ defmodule Rollbax.Reporter.Standard do
     }
   end
 
+  # OTP error logger crash report
+  defp handle_error_format(:crash_report, [data, _]) do
+    {m, f, a} = Keyword.fetch!(data, :initial_call)
+
+    name =
+      case Keyword.get(data, :registered_name) do
+        [] -> data |> Keyword.fetch!(:pid) |> inspect()
+        name -> inspect(name)
+      end
+
+    {class, message, stacktrace, crash_report} =
+      case Keyword.fetch!(data, :error_info) do
+        {_, %class{message: message}, stacktrace} ->
+          {inspect(class), message, stacktrace, ""}
+
+        {:exit, reason, stacktrace} when is_atom(reason) ->
+          {inspect(reason), inspect(reason), stacktrace, ""}
+
+        {_, info, stacktrace} when is_tuple(info) ->
+          case elem(info, 0) do
+            %class{message: message} -> {inspect(class), message, stacktrace, inspect(info)}
+            %class{} -> {inspect(class), inspect(class), stacktrace, inspect(info)}
+            atom when is_atom(atom) -> {inspect(atom), inspect(atom), stacktrace, inspect(info)}
+            {%class{message: message}, inner_stacktrace} -> {inspect(class), message, inner_stacktrace, inspect(info)}
+            {%class{}, inner_stacktrace} -> {inspect(class), inspect(class), inner_stacktrace, inspect(info)}
+            {atom, inner_stacktrace} when is_atom(atom) -> {inspect(atom), inspect(atom), inner_stacktrace, inspect(info)}
+            {{%class{message: message}, inner_stacktrace}, _} -> {inspect(class), message, inner_stacktrace, inspect(info)}
+            reason -> {"ProcessCrash", "A process crashed", stacktrace, inspect(reason, limit: :infinity)}
+          end
+      end
+
+    %Rollbax.Exception{
+      class: "Crash report (#{class})",
+      message: message,
+      stacktrace: stacktrace,
+      custom: %{
+        name: name,
+        started_from: data |> Keyword.fetch!(:ancestors) |> hd() |> inspect(),
+        function: inspect(Function.capture(m, f, length(a))),
+        arguments: inspect(a),
+        crash_report: crash_report
+      }
+    }
+  end
+
   defp handle_error_format('** State machine ' ++ _ = message, data) do
     if charlist_contains?(message, 'Callback mode') do
       :next
@@ -118,7 +167,7 @@ defmodule Rollbax.Reporter.Standard do
 
   # Any other error (for example, the ones logged through
   # :error_logger.error_msg/1). This reporter doesn't report those to Rollbar.
-  defp handle_error_format(_format, _data) do
+  defp handle_error_format(_, _) do
     :next
   end
 
